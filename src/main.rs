@@ -20,21 +20,32 @@ async fn main() -> Result<(), Box<dyn Error>> {
             .await?;
         return Ok(());
     }
-    if args.len() < 5 || args.len() > 7 || args[1] != "render" {
+    if args.len() < 5 || args[1] != "render" {
         eprintln!(
-            "Usage: aspectwrite render <strokes.json> <output.png> '<LaTeX>' [--seed <u64>]\n       aspectwrite mcp [strokes.json]  (defaults to .local/aspectwrite-strokes.json)"
+            "Usage: aspectwrite render <strokes.json> <output.png> '<LaTeX>' [--seed <u64>] [--scale <1-16>]\n       aspectwrite mcp [strokes.json]  (defaults to .local/aspectwrite-strokes.json)"
         );
         std::process::exit(2);
     }
-    let seed = if args.len() == 7 && args[5] == "--seed" {
-        args[6].parse::<u64>()?
-    } else if args.len() == 5 {
-        0
-    } else {
-        return Err("expected --seed <u64>".into());
-    };
+    let mut seed = 0;
+    let mut scale = 1;
+    let mut options = args[5..].chunks_exact(2);
+    for option in &mut options {
+        match option[0].as_str() {
+            "--seed" => seed = option[1].parse::<u64>()?,
+            "--scale" => scale = option[1].parse::<u32>()?,
+            _ => return Err(format!("unknown render option {}", option[0]).into()),
+        }
+    }
+    if !options.remainder().is_empty() {
+        return Err("render option is missing its value".into());
+    }
     let handwriting = aspectwrite::render::Handwriting::load(Path::new(&args[2]))?;
-    let png = aspectwrite::render_png_with_seed(&args[4], &handwriting, seed)?;
+    let png = aspectwrite::render::png_with_seed_scaled(
+        &aspectwrite::parser::parse(&args[4])?,
+        &handwriting,
+        seed,
+        scale,
+    )?;
     std::fs::write(&args[3], png)?;
     eprintln!("Wrote {}", args[3]);
     Ok(())
